@@ -1,0 +1,63 @@
+.container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 70vh; /* Take full viewport height */
+    background-image: url(https://img.freepik.com/free-vector/forest-scene-with-various-forest-trees_1308-58896.jpg?w=2000); 
+    background-size: cover; 
+    background-position: center; 
+    background-repeat: no-repeat; 
+}
+
+.game-board {
+    display: grid;
+    grid-template-columns: repeat(3, 100px);
+    grid-template-rows: repeat(3, 100px);
+    gap: 30px;
+    justify-content: center;
+    margin: 20px auto;
+    position: relative;
+  }
+  
+  .cell {
+    width: 110px;
+    height: 110px;
+    background-color: #f0f0f0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 24px;
+    cursor: pointer;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    transition: background-color 0.3s ease;
+    margin: auto;
+  }
+  
+  .cell:hover {
+    background-color: #e4e4e4;
+  }
+  
+  button {
+    margin: 20px;
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+    border: none;
+    border-radius: 5px;
+    background-color: #4CAF50;
+    color: white;
+  }
+  
+  button:hover {
+    background-color: #45a049;
+  }
+  
+  input[type="text"] {
+    padding: 10px;
+    margin: 20px;
+    font-size: 16px;
+    border: 2px solid #ddd;
+    border-radius: 5px;
+    width: 200px;
+  }

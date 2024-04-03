@@ -1,0 +1,61 @@
+
+.header {
+  display: flex;
+  text-align: center;
+  justify-content: center;
+}
+
+.error-message {
+  margin: 20px auto;
+  padding: 15px;
+  max-width: 90%;
+  text-align: center;
+  background-color: #f8d7da; 
+  color: #721c24; 
+  border: 1px solid #f5c6cb; 
+  border-radius: 8px; 
+  font-family: 'Arial', sans-serif; 
+  font-size: 16px; 
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); 
+  transition: background-color 0.3s ease-in-out; 
+}
+
+.error-message:hover {
+  background-color: #f5c6cb; 
+}
+
+
+button {
+  margin: 20px;
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  border: none;
+  border-radius: 5px;
+  background-color: #4CAF50;
+  color: white;
+}
+
+button:hover {
+  background-color: #45a049;
+}
+
+input[type="text"] {
+  padding: 10px;
+  margin: 20px;
+  font-size: 16px;
+  border: 2px solid #ddd;
+  border-radius: 5px;
+  width: 200px;
+}
+
+.log-out-btn{
+  margin: 20px;
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  border: none;
+  border-radius: 5px;
+  background-color: #df3737;
+  color: white;
+}
