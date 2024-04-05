@@ -25,6 +25,26 @@ export const createGame = async (playerId) => {
   }
 };
 
+export const gameReset = async (gameId) => {
+  try {
+    const game = await db.games.findOne({
+      where: { gameId: gameId },
+    });
+
+    if (!game) {
+      throw new Error(`Game with ID ${gameId} not found.`);
+    }
+
+    await game.update({
+      board: Array(9).fill(null), 
+      currentTurn: game.playerOneId, 
+      status: GameStatus.Pending,
+    });
+  } catch (error) {
+    throw new Error(`${error.message}`);
+  }
+}
+
 
 export const allGames = async () => {
   try{

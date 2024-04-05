@@ -8,7 +8,7 @@ const WelcomeModal = ({
   isPlayerOne,
   gameId,
   setGameId,
-  availableGames,
+  onJoinGame,
 }) => {
   return (
     <div className="modal">
@@ -17,33 +17,24 @@ const WelcomeModal = ({
         <input
           type="text"
           placeholder="Enter your name to play"
-          value={playerName}
+          value={playerName || ""}
           onChange={(e) => onNameChange(e.target.value)}
         />
         {!isPlayerOne && (
           <>
             <input
               type="text"
-              value={gameId}
+              value={gameId || ""}
               onChange={(e) => setGameId(e.target.value)}
               placeholder="Enter Game ID to Join"
             />
-            {
-                availableGames.length > 0 && (
-                    <div>
-                        <h3>Current Games</h3>
-                        {
-                            availableGames.map((game,i)=>(
-                                <div key={game.id} onClick={() => setGameId(gameId)}>Game : {game.id}</div>
-                            ))
-                        }
-                    </div>
-                )
-            }
           </>
         )}
-        <button onClick={onStart}>{isPlayerOne ? "Start New Game" : "Start Playing"}</button>
+        <button onClick={onStart}>
+          {isPlayerOne ? "Start New Game" : "Register"}
+        </button>
 
+        {gameId && <button onClick={onJoinGame}>Join Game</button>}
       </div>
     </div>
   );

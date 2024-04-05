@@ -1,8 +1,10 @@
+import db from "../models/index.js";
 import { allPlayers, createPlayer, playerById } from "../services/player.js";
 
-export const postPlayer = async (data, socket) => {
+export const postPlayer = async (data, socket,sessionID) => {
   try {
-    const { name } = data;
+    
+    const { name, gameId } = data;
 
     if (!name) {
       socket.emit("playerResponse", {
@@ -12,9 +14,54 @@ export const postPlayer = async (data, socket) => {
       return;
     }
 
-    const newPlayer = await createPlayer({ name });
+    let player = await db.players.findOne({where:{name:name}});
 
-    socket.emit("playerResponse", { type: "playerCreated", newPlayer });
+    if (!player) {
+      player = await createPlayer({ name });
+    }
+
+    if (gameId) {
+      const game = await db.games.findOne({ where: { gameId } });
+
+      if (!game) {
+        socket.emit("playerResponse", {
+          type: "error",
+          message: "Game not found",
+        });
+        return;
+      }
+
+      if (game.playerTwoId) {
+        socket.emit("playerResponse", {
+          type: "error",
+          message: "Game is already full",
+        });
+        return;
+      }
+
+      game.playerTwoId = player.playerId;
+      await game.save();
+
+      socket.join(gameId); // Join the socket.io room for the game
+
+      // Notify the other player in the game that a new player has joined
+      socket.to(gameId).emit("gameJoinedResponse", {
+        type: "gameJoined",
+        gameId: gameId,
+        playerTwo: player,
+        sessionID
+      });
+
+      // Confirm to the joining player that they've been added
+      socket.emit("playerResponse", {
+        type: "joinedGame",
+        game,
+        playerTwo: player,
+        sessionID
+      });
+    } else {
+      socket.emit("playerResponse", { type: "playerCreated", player,sessionID });
+    }
   } catch (error) {
     socket.emit("playerResponse", {
       type: "error",
@@ -62,5 +109,21 @@ export const getPlayer = async (data, socket) => {
       statusCode: error.statusCode,
       message: error.statusMessage,
     });
+  }
+};
+
+
+
+export const getPlayerInfo = async (playerId) => {
+  try {
+    const player = await db.players.findByPk(playerId);
+    if (!player) {
+      console.log("Player not found");
+      return null; // or handle as you see fit
+    }
+    return player; // Adjust this as needed based on your data model
+  } catch (error) {
+    console.error("Error fetching player:", error);
+    throw new Error("Error fetching player");
   }
 };

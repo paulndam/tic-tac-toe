@@ -3,6 +3,7 @@ import { io } from "socket.io-client";
 import { useEffect, useState } from "react";
 import GameBoard from "./components/game-board/GameBoard";
 import WelcomeModal from "./components/welcomeModal/WelcomeModal";
+import { GameStatus } from "./components/utils/gameStatus";
 
 const socket = io("http://localhost:8080", {
   path: "/socket.io",
@@ -12,131 +13,225 @@ function App() {
   const [playerName, setPlayerName] = useState("");
   const [playerId, setPlayerId] = useState(null);
   const [board, setBoard] = useState(Array(9).fill(null));
-  const [gameId, setGameId] = useState(null);
+  const [gameId, setGameId] = useState("");
   const [gameStarted, setGameStarted] = useState(false);
   const [waitingForPlayer, setWaitingForPlayer] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [showNotificationMessage, setNotificationMessage] = useState("");
   const [isPlayerOne, setIsPlayerOne] = useState(false);
-  const [availableGames,setAvailableGames] = useState([]);
+  const [isPlayerTwo, setIsPlayerTwo] = useState(false);
+  const [availableGames, setAvailableGames] = useState([]);
+  const [sessionID, setSessionID] = useState(null);
+  const [isLoading, setIsLoading] = useState(true); // New loading state
 
 
-  const handleNameChange = (name) => {
-    setPlayerName(name);
+  
+
+  const updateGameStateFromResponse = (response) => {
+    // Consolidated game state update logic
+    setPlayerId(response.playerId);
+    setPlayerName(response.playerName);
+    setGameId(response.gameId);
+    setBoard(response.board);
+    setIsPlayerOne(response.isPlayerOne);
+    setGameStarted(response.gameStarted);
+    setIsPlayerTwo(response.isPlayerTwo);
+    // Additional updates as necessary...
   };
 
   const handleStartGame = () => {
-    if (playerName.trim()) {
-
-      if(!playerId){
-        socket.emit("createPlayer", {
-          name: playerName.trim(),
-        });
-      }
-
-      if(isPlayerOne){
-        socket.emit('createGame', { playerId });
-      }
-      
-      // setIsPlayerOne(true);
-      setErrorMessage("");
-    } else {
+    if (!playerName.trim()) {
       alert("Please enter a name.");
+      return;
+    }
+    if (!playerId) {
+      setIsPlayerOne(true);
+      console.log("Creating Player...");
+      socket.emit("createPlayer", { name: playerName.trim() });
+      setWaitingForPlayer(true);
     }
   };
 
-  const logOut = () => {
-    localStorage.removeItem("playerId");
-    setPlayerId(null);
+  const handleJoinGameOrRegister = () => {
+    if (!playerName.trim() || (gameId && !gameId.trim())) {
+      alert("Please enter a name and, if joining a game, a valid game ID.");
+      return;
+    }
+
+    if (!playerId) {
+      console.log(
+        gameId ? "Joining Game as Player Two..." : "Creating Player and Game..."
+      );
+
+      socket.emit(
+        "createPlayer",
+        {
+          name: playerName.trim(),
+          gameId: gameId || undefined,
+        }
+
+      );
+    }
   };
 
-  useEffect(() => {
-    // When player ID or game state changes, update Local Storage
-    localStorage.setItem('playerId', playerId);
-    localStorage.setItem('playerName', playerName);
-    localStorage.setItem('gameId', gameId);
-    localStorage.setItem('isPlayerOne', isPlayerOne.toString());
-}, [isPlayerOne,gameId,playerName]);
+  const handleNameChange = (newName) => {
+    setPlayerName(newName);
+  };
 
+  const handleGameIdChange = (newGameId) => {
+    setGameId(newGameId);
+  };
+
+  // useEffect(() => {
+  //   const storedGameId = localStorage.getItem("gameId");
+  //   const storedIsPlayerOne = localStorage.getItem("isPlayerOne") === "true";
+  //   const storedGameStarted = localStorage.getItem("gameStarted") === "true";
+
+  //   if (storedGameId) {
+  //     socket.emit("requestGameState", { gameId: storedGameId });
+  //   } else {
+  //     setGameStarted(storedGameStarted && storedIsPlayerOne);
+  //   }
+  // }, []);
+
+  // useEffect(() => {
+  //   const storedPlayerId = localStorage.getItem("playerId");
+  //   const storedGameId = localStorage.getItem("gameId");
+
+  //   // Only set isPlayerOne or gameStarted based on explicit server validation
+  //   if (storedGameId && storedPlayerId) {
+  //     // Request current game state from the server to validate
+  //     socket.emit("requestGameState", { gameId: storedGameId });
+  //   }
+  // }, []);
+
+  
 
   useEffect(() => {
     const storedPlayerId = localStorage.getItem("playerId");
     const storedPlayerName = localStorage.getItem("playerName");
     const storedGameId = localStorage.getItem("gameId");
-    const storedIsPlayerOne = localStorage.getItem("isPlayerOne")
+    const storedIsPlayerOne = localStorage.getItem("isPlayerOne");
+    const storedGameStarted = localStorage.getItem("gameStarted");
+    const savedBoard = localStorage.getItem("board");
 
-    
+    if (savedBoard) {
+      setBoard(JSON.parse(savedBoard));
+    }
 
     if (storedPlayerId && storedPlayerName) {
       setPlayerId(storedPlayerId);
       setPlayerName(storedPlayerName);
+      setIsPlayerTwo(!isPlayerOne);
     }
 
     if (storedGameId) {
       setGameId(storedGameId);
-      setIsPlayerOne(storedIsPlayerOne === 'true');
-      // setGameStarted(true);  
-      // If there is a stored game ID but no stored player ID, the player might have joined a game without registering
-      if (!storedPlayerId) {
-        setIsPlayerOne(false); // Ensure this user is considered as joining a game, not creating one
-      }
+      setIsPlayerOne(storedIsPlayerOne === "true");
+      // if (!storedPlayerId) {
+      //   setIsPlayerOne(false);
+      // }
+      setGameStarted(storedGameStarted === "true" || storedIsPlayerOne === "true");
+
     }
 
-    socket.on("playerResponse", (res) => {
-      console.log("response from socket ====>", res);
-      if (res.newPlayer) {
-        localStorage.setItem("playerId", res.newPlayer.playerId);
-        localStorage.setItem("playerName", res.newPlayer.name);
-        setPlayerId(res.newPlayer.playerId);
-        setPlayerName(res.newPlayer.name);
-        // setIsPlayerOne(true)
-      }
-    });
+    // if(storedGameId){
+    //   console.log("Requesting game state for gameId:", storedGameId);
 
-    socket.on("gameCreated", (res) => {
-      console.log("response from creating game ====>", res);
+    //   socket.emit("requestGameState",{gameId:storedGameId})
+    // }
+
+    const handlePlayerResponse = (res) => {
+      console.log("response from creating player ===>", res);
+      if (res.sessionID) {
+        // Store the session ID in sessionStorage
+        sessionStorage.setItem("sessionID", res.sessionID);
+        setSessionID(res.sessionID);
+      }
+      if (res.type === "playerCreated") {
+        const { playerId, name } = res.player;
+        localStorage.setItem("playerId", playerId);
+        localStorage.setItem("playerName", name);
+
+        setPlayerId(playerId);
+        setPlayerName(name);
+        setIsPlayerTwo(false);
+      } else if (res.type === "joinedGame") {
+        const { game, playerTwo } = res;
+        localStorage.setItem("gameId", game.gameId);
+        localStorage.setItem("playerId", playerTwo.id);
+        setGameId(game.gameId);
+        setGameStarted(true);
+        setIsPlayerTwo(true);
+        setWaitingForPlayer(false);
+        setNotificationMessage(
+          `Joined game successfully. Your game ID: ${game.gameId}. Waiting for the game to start.`
+        );
+      }
+    };
+
+    const handleGameResponse = (res) => {
+      console.log("response from creating game ===>", res);
       if (res.newGame) {
-        localStorage.setItem("gameId", res.newGame.gameId);
-        localStorage.setItem("isPlayerOne", 'true');
-        setGameId(res.newGame.gameId);
+        const { gameId } = res.newGame;
+        localStorage.setItem("gameId", gameId);
+        localStorage.setItem("isPlayerOne", "true");
+        setGameId(gameId);
+        setGameStarted(true);
+        setIsPlayerOne(true);
+        setWaitingForPlayer(true);
+      }
+    };
+
+    const handleGameJoinedResponse = (response) => {
+      console.log("Game join response:====>", response);
+      if (response.type === "gameJoined") {
+        // Success, a player has joined the game
+        const { updateGame, playerTwo } = response;
+        localStorage.setItem("gameId", gameId);
+        setGameId(gameId);
         setGameStarted(true);
         setWaitingForPlayer(false);
-        setIsPlayerOne(true);
+        setNotificationMessage(
+          `Player ${playerTwo.name} has joined your game. The game has started!`
+        );
+      } else if (response.type === "error") {
+        setErrorMessage(response.message);
       }
-    });
+    };
 
-    socket.on("allGames",(games) => {
-      console.log("=== response listing all games =====>",games)
-      setAvailableGames(games)
-    })
+    const handleGameStateResponse = (response) => {
+      if (response.type === "gameState") {
+        const isCurrentPlayerOne = response.playerOneId === playerId;
+        const isCurrentPlayerTwo = response.playerTwoId === playerId;
 
-    socket.on("playerCreated", (res) => {
-      if(!playerId && res.newPlayer.playerId){
-        setPlayerId(res.playerId);
-        localStorage.setItem(res.newPlayer.playerId)
-        localStorage.setItem(res.newPlayer.name)
+        setGameStarted(response.status !== GameStatus.Finished);
+        setIsPlayerOne(isCurrentPlayerOne);
+        setIsPlayerTwo(isCurrentPlayerTwo);
 
-        if(!isPlayerOne){
-          socket.emit("joinGame",{gameId,playerId:res.newPlayer.playerId})
+        if (isCurrentPlayerTwo) {
+          setWaitingForPlayer(false);
         }
+      } else if (response.type === "error") {
       }
-    })
+    };
 
-    socket.on("gameJoined", (res) => {
-      console.log("==== response joining game ======",res)
-      if (!isPlayerOne) {
-        localStorage.setItem("gameId", res.updateGame.gameId); // Assuming 'res' has gameId
-        localStorage.setItem("isPlayerOne", 'false');
+    const handleGameResetResponse = (response) => {
+      console.log("Game reset response:==>", response);
+      if (response.type === "gameReset") {
+        setBoard(Array(9).fill(null)); // Reset the board state
+        setGameStarted(false);
+        setWaitingForPlayer(false);
+        console.log("Game has been reset");
       }
-      setGameStarted(true);
-      setWaitingForPlayer(false);
-      setNotificationMessage("Player Two has joined the game");
-    });
+    };
 
-    socket.on("gameUpdate", (game) => {
-      setBoard(game.board);
-      //TO DO: Handle other game updates like current turn, game status, etc.
-    });
+    // Register socket event listeners
+    socket.on("playerResponse", handlePlayerResponse);
+    socket.on("gameResponse", handleGameResponse);
+    socket.on("gameJoinedResponse", handleGameJoinedResponse);
+    socket.on("gameResetResponse", handleGameResetResponse);
+    socket.on("gameStateResponse", handleGameStateResponse);
 
     socket.on("playerResponse", (error) => {
       if (error.type === "error") {
@@ -151,57 +246,101 @@ function App() {
     });
 
     return () => {
-      socket.off("playerResponse");
-      socket.off("gameCreated");
-      socket.off("gameJoined");
-      socket.off("gameUpdate");
+      socket.off("playerResponse", handlePlayerResponse);
+      socket.off("gameResponse", handleGameResponse);
+      socket.off("gameJoinedResponse", handleGameJoinedResponse);
+      socket.off("gameResetResponse", handleGameResetResponse); // Fixed typo here
+      socket.off("gameStateResponse", handleGameStateResponse);
     };
-  }, [playerId,gameId,isPlayerOne,playerName]);
+  }, [isPlayerOne, playerId, gameId]);
 
+
+  useEffect(() => {
+    const session = sessionStorage.getItem("sessionID");
+    console.log("session ======>", session);
+  
+    if (session) {
+      // Emit the validateSession event and handle the response through a callback
+      socket.emit("validateSession", { sessionID: session }, (response) => {
+        console.log("session response =======>", response);
+        if (response.valid) {
+          updateGameStateFromResponse(response);
+        } else {
+          sessionStorage.removeItem("sessionID");
+        }
+        setIsLoading(false); // Update loading state regardless of validation result
+      });
+    } else {
+      setIsLoading(false); // No session ID, not loading
+    }
+  }, [socket]); // Ensure socket is in the dependency array if it's stateful
   
 
-  const createGame = () => {
-    if (playerId) {
-      socket.emit("createGame", { playerId });
-      setWaitingForPlayer(true);
-    } else {
-      setErrorMessage("You must be registered to create a game");
+  useEffect(() => {
+    if (isPlayerOne && !gameId) {
+      console.log(
+        "Player is Player One and no gameId exists, creating game..."
+      );
+      socket.emit("createGame", { playerId: playerId });
     }
-  };
+  }, [isPlayerOne, gameId, playerId]);
 
-  const createPlayerAndJoinGame = () => {
-    if (playerName.trim() && gameId.trim()) {
-      if(!playerId){
-        socket.emit("createPlayer", { name: playerName.trim() });
-      }else{
-        socket.emit("joinGame", {gameId,playerId });
-      }
-      // socket.emit("joinGame", { playerId,gameId });
-      // setIsPlayerOne(false);
-    } else {
-      
-      setErrorMessage("Please enter your name and a valid game ID to join.");
-    }
-  };
+  useEffect(() => {
+    localStorage.setItem("board", JSON.stringify(board));
+  }, [board]);
 
   const makeMove = (position) => {
     socket.emit("makeMove", { playerId, gameId, position });
   };
 
+  const handleResetGame = () => {
+    if (!gameId) {
+      console.log("No game to reset");
+      return;
+    }
+    socket.emit("resetGame", { gameId });
+
+    setBoard(Array(9).fill(null));
+    setGameStarted(false);
+    setWaitingForPlayer(false);
+  };
+
+  const logOut = () => {
+    localStorage.removeItem("playerId");
+    localStorage.removeItem("gameId");
+    localStorage.removeItem("playerName");
+
+    // player leave game
+    socket.emit("leaveGame", { playerId, gameId });
+
+    setPlayerId(null);
+    setPlayerName("");
+    setGameStarted(false);
+    setIsPlayerOne(false);
+    setIsPlayerTwo(false);
+    setGameId("");
+  };
+
+  if (isLoading) {
+    return <div>Loading...</div>;
+  }
+
   return (
     <div className="App">
       {errorMessage && <div className="error-message">{errorMessage}</div>}
+      {showNotificationMessage && (
+        <div className="notification-message">{showNotificationMessage}</div>
+      )}
 
-      {!playerId ? (
+      {!gameStarted ? (
         <WelcomeModal
           playerName={playerName}
           onNameChange={handleNameChange}
           onStart={handleStartGame}
-          // onStart={isPlayerOne ? handleStartGame : createPlayerAndJoinGame}
           gameId={gameId}
-          setGameId={setGameId} // for updating gameId in WelcomeModal
+          setGameId={handleGameIdChange}
           isPlayerOne={isPlayerOne}
-          availableGames={availableGames}
+          onJoinGame={handleJoinGameOrRegister}
         />
       ) : (
         <>
@@ -211,29 +350,11 @@ function App() {
           </div>
 
           {waitingForPlayer && <div>Waiting for Player Two to join...</div>}
-
           {gameStarted && <GameBoard board={board} onMakeMove={makeMove} />}
-
           {gameStarted && <div>Game started! Your game ID: {gameId}</div>}
-
-          {!gameStarted && isPlayerOne && (
-            <>
-              <button onClick={createGame}>Create Game</button>
-              {gameId && <div>Share game ID with Player Two: {gameId}</div>}
-            </>
-          )}
-
-          {!gameStarted && !isPlayerOne && (
-            <>
-              <input
-                type="text"
-                value={gameId}
-                onChange={(e) => setGameId(e.target.value)}
-                placeholder="enter your name"
-              />
-              <button onClick={createPlayerAndJoinGame}>Join Game1</button>
-            </>
-          )}
+          <button className="reset-game-btn" onClick={handleResetGame}>
+            Reset Game
+          </button>
 
           <button className="log-out-btn" onClick={logOut}>
             Log Out
