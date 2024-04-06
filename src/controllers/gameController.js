@@ -4,6 +4,7 @@ import { allGames, createGame, gameReset, joinGame, makeMove } from "../services
 
 export const postGame = async (data, socket,gameSessionId) => {
   try {
+    console.log("====== data in post game controller =========",data)
     const { playerId } = data;
 
     if (!playerId) {
@@ -14,11 +15,39 @@ export const postGame = async (data, socket,gameSessionId) => {
       return;
     }
 
-    const newGame = await createGame(playerId);
+    const player = await db.players.findByPk(playerId)
+    console.log("found player =========>",player)
 
-    socket.join(newGame.gameId);
+    if(!player){
+      socket.emit({
+        type:"error",
+        message: "Player not found",
+      })
+    }
 
-    socket.emit("gameResponse", { type: "gameCreated", newGame,gameSessionId });
+    const newPlayerId = player.dataValues.playerId
+
+
+    const newGame = await createGame(newPlayerId);
+    console.log("new game =======>",newGame)
+
+    if (!newGame) {
+      // This branch might not be necessary if createGame throws an error for failures
+      console.error("Failed to create a new game.");
+      socket.emit("gameResponse", {
+        type: "error",
+        message: "Failed to create a new game.",
+      });
+      return;
+    }
+
+    socket.join(newGame.gameId || gameSessionId);
+
+    socket.emit("gameResponse", { 
+      type: "gameCreated", 
+      newGame,
+      gameSessionId
+     });
 
     // broadcast event to all players about new game created.
     socket.broadcast.emit("gameResponse", {
@@ -115,9 +144,12 @@ export const listAllGames = async (socket) => {
 //   }
 // };
 
-
 export const joinGameHandler = async (data, socket, io) => {
+  console.log("data when joining game ======>", data);
+  console.log("socket when joining game ======>", socket.id);
+
   const { sessionID, gameId } = data;
+
   if (!validateSession(sessionID)) {
     socket.emit("gameJoinedResponse", {
       type: "error",
@@ -127,20 +159,25 @@ export const joinGameHandler = async (data, socket, io) => {
   }
 
   const sessionData = sessions.get(sessionID);
-  // Assuming the session stores playerId, you can now pass it along
+  console.log("sessionData ======>",sessionData)
+
   const playerId = sessionData.playerId;
+  console.log("playerId ======>",playerId)
+
 
   try {
-    // Assuming you have a method joinGame that takes gameId and playerId
     const updateGame = await joinGame(gameId, playerId);
+    console.log("==== updateGame ====",updateGame)
 
-    // Fetch playerTwo details after joining the game
     const playerTwo = await db.players.findByPk(playerId);
+    console.log("==== playerTwo ====",playerTwo)
+
+
     if (!playerTwo) {
       throw new Error("Player not found");
     }
 
-    socket.join(updateGame.gameId);
+    socket.join(gameId);
 
     // Notify all clients in the game room about the new player joining
     io.to(gameId).emit("gameJoinedResponse", {
@@ -148,16 +185,17 @@ export const joinGameHandler = async (data, socket, io) => {
       updateGame,
       playerTwo: {
         id: playerTwo.playerId,
-        name: playerTwo.name, 
+        name: playerTwo.name,
       },
     });
   } catch (error) {
     socket.emit("gameJoinedResponse", {
       type: "error",
-      message: "An error occurred while trying to join the game",
+      message: error.message || "An error occurred while trying to join the game",
     });
   }
 };
+
 
 
 export const makeMoveHandler = async (data, socket, io) => {
@@ -220,10 +258,13 @@ export const makeMoveHandler = async (data, socket, io) => {
 
 
 export const gameState = async ({ gameId, sessionID }, socket) => {
+  console.log("===== game state controller method ======>",gameId,sessionID)
   if (!validateSession(sessionID)) {
     socket.emit('gameStateResponse', { type: 'error', message: 'Invalid session ID' });
     return;
   }
+
+
 
   try {
     const game = await db.games.findByPk(gameId, {
@@ -235,13 +276,16 @@ export const gameState = async ({ gameId, sessionID }, socket) => {
       return;
     }
 
-    // Assuming the game state includes IDs and potentially names of players
+    console.log("===== game in game state controller method ====>",game)
+
+
     socket.emit('gameStateResponse', {
       type: 'gameState',
       status: game.status,
-      playerOne: game.PlayerOne, // Assuming PlayerOne includes the player object
-      playerTwo: game.PlayerTwo, // Assuming PlayerTwo includes the player object
+      playerOne: game.PlayerOne, 
+      playerTwo: game.PlayerTwo, 
       currentTurn: game.currentTurn,
+      sessionID
     });
   } catch (error) {
     socket.emit("gameStateResponse", {

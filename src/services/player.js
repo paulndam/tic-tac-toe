@@ -1,7 +1,7 @@
 import db from "../models/index.js";
 import { AppError } from "../util/errorHandler.js";
 
-export const createPlayer = async ({ name }) => {
+export const createPlayer = async ({name}) => {
   try {
 
     const checkUserNameExist = await db.players.findOne({where:{name:name}})
@@ -11,6 +11,8 @@ export const createPlayer = async ({ name }) => {
     }
 
     const newPlayer = await db.players.create({ name });
+
+    console.log("new player created from service method ====>",newPlayer)
 
     return newPlayer;
   } catch (error) {

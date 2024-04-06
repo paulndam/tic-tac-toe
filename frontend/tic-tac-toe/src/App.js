@@ -22,13 +22,10 @@ function App() {
   const [isPlayerTwo, setIsPlayerTwo] = useState(false);
   const [availableGames, setAvailableGames] = useState([]);
   const [sessionID, setSessionID] = useState(null);
+  const [gameSessionId, setGameSessionId] = useState(null);
   const [isLoading, setIsLoading] = useState(true); // New loading state
 
-
-  
-
   const updateGameStateFromResponse = (response) => {
-    // Consolidated game state update logic
     setPlayerId(response.playerId);
     setPlayerName(response.playerName);
     setGameId(response.gameId);
@@ -36,7 +33,6 @@ function App() {
     setIsPlayerOne(response.isPlayerOne);
     setGameStarted(response.gameStarted);
     setIsPlayerTwo(response.isPlayerTwo);
-    // Additional updates as necessary...
   };
 
   const handleStartGame = () => {
@@ -52,26 +48,43 @@ function App() {
     }
   };
 
-  const handleJoinGameOrRegister = () => {
-    if (!playerName.trim() || (gameId && !gameId.trim())) {
-      alert("Please enter a name and, if joining a game, a valid game ID.");
+
+
+  const handleJoinGameOrRegister = async () => {
+    const enteredGameId = prompt("Enter the Game ID you want to join:");
+    if (!playerName.trim()) {
+      alert("Please enter your name before joining a game.");
       return;
     }
 
     if (!playerId) {
-      console.log(
-        gameId ? "Joining Game as Player Two..." : "Creating Player and Game..."
-      );
+      console.log("No playerId found, creating Player...");
+      socket.emit("createPlayer", { name: playerName.trim() });
 
-      socket.emit(
-        "createPlayer",
-        {
-          name: playerName.trim(),
-          gameId: gameId || undefined,
+      socket.once("playerResponse", (response) => {
+        console.log("==== creating player two =======",response)
+        if (response.type === "playerCreated") {
+          localStorage.setItem("playerId", response.player.playerId);
+          setPlayerId(response.player.playerId);
+          joinGame(enteredGameId, response.player.playerId);
+        } else {
+          setErrorMessage("Failed to create player.");
         }
-
-      );
+      });
+    } else {
+      joinGame(enteredGameId, playerId);
     }
+  };
+
+  const joinGame = (gameId, playerId) => {
+    if (!gameId) {
+      alert("Game ID is required to join a game.");
+      return;
+    }
+    console.log("Joining game as Player Two...");
+    socket.emit("joinGame", { gameId: gameId, playerId: playerId, sessionID: localStorage.getItem("sessionID") });
+    setIsPlayerOne(false);
+    setGameId(gameId);
   };
 
   const handleNameChange = (newName) => {
@@ -82,31 +95,6 @@ function App() {
     setGameId(newGameId);
   };
 
-  // useEffect(() => {
-  //   const storedGameId = localStorage.getItem("gameId");
-  //   const storedIsPlayerOne = localStorage.getItem("isPlayerOne") === "true";
-  //   const storedGameStarted = localStorage.getItem("gameStarted") === "true";
-
-  //   if (storedGameId) {
-  //     socket.emit("requestGameState", { gameId: storedGameId });
-  //   } else {
-  //     setGameStarted(storedGameStarted && storedIsPlayerOne);
-  //   }
-  // }, []);
-
-  // useEffect(() => {
-  //   const storedPlayerId = localStorage.getItem("playerId");
-  //   const storedGameId = localStorage.getItem("gameId");
-
-  //   // Only set isPlayerOne or gameStarted based on explicit server validation
-  //   if (storedGameId && storedPlayerId) {
-  //     // Request current game state from the server to validate
-  //     socket.emit("requestGameState", { gameId: storedGameId });
-  //   }
-  // }, []);
-
-  
-
   useEffect(() => {
     const storedPlayerId = localStorage.getItem("playerId");
     const storedPlayerName = localStorage.getItem("playerName");
@@ -114,6 +102,7 @@ function App() {
     const storedIsPlayerOne = localStorage.getItem("isPlayerOne");
     const storedGameStarted = localStorage.getItem("gameStarted");
     const savedBoard = localStorage.getItem("board");
+    const storedSessionId = localStorage.getItem("sessionID");
 
     if (savedBoard) {
       setBoard(JSON.parse(savedBoard));
@@ -125,27 +114,20 @@ function App() {
       setIsPlayerTwo(!isPlayerOne);
     }
 
-    if (storedGameId) {
+    if (storedGameId && storedSessionId) {
       setGameId(storedGameId);
       setIsPlayerOne(storedIsPlayerOne === "true");
-      // if (!storedPlayerId) {
-      //   setIsPlayerOne(false);
-      // }
-      setGameStarted(storedGameStarted === "true" || storedIsPlayerOne === "true");
 
+      setGameStarted(
+        storedGameStarted === "true" || storedIsPlayerOne === "true"
+      );
+      setSessionID(storedSessionId);
     }
-
-    // if(storedGameId){
-    //   console.log("Requesting game state for gameId:", storedGameId);
-
-    //   socket.emit("requestGameState",{gameId:storedGameId})
-    // }
 
     const handlePlayerResponse = (res) => {
       console.log("response from creating player ===>", res);
       if (res.sessionID) {
-        // Store the session ID in sessionStorage
-        sessionStorage.setItem("sessionID", res.sessionID);
+        localStorage.setItem("sessionID", res.sessionID);
         setSessionID(res.sessionID);
       }
       if (res.type === "playerCreated") {
@@ -156,6 +138,12 @@ function App() {
         setPlayerId(playerId);
         setPlayerName(name);
         setIsPlayerTwo(false);
+
+        if(playerId && isPlayerOne && !gameId){
+          console.log("==== creating game instantly after creating player one ====")
+          socket.emit("createGame",{playerId})
+        }
+
       } else if (res.type === "joinedGame") {
         const { game, playerTwo } = res;
         localStorage.setItem("gameId", game.gameId);
@@ -171,6 +159,10 @@ function App() {
     };
 
     const handleGameResponse = (res) => {
+      if (res.gameSessionId) {
+        localStorage.setItem("gameSessionID", res.gameSessionId);
+        setGameSessionId(res.gameSessionId);
+      }
       console.log("response from creating game ===>", res);
       if (res.newGame) {
         const { gameId } = res.newGame;
@@ -181,6 +173,14 @@ function App() {
         setIsPlayerOne(true);
         setWaitingForPlayer(true);
       }
+      // else if (res.type === "newGameAvailable") {
+      //   console.log("New game available:", res.newGame);
+      //   // Optionally, update UI to show available games to join
+      // } else if (res.type === "gameJoined") {
+      //   setGameStarted(GameStatus.In_Progress);
+      //   setGameId(res.updateGame.gameId); 
+      // }
+      
     };
 
     const handleGameJoinedResponse = (response) => {
@@ -190,7 +190,8 @@ function App() {
         const { updateGame, playerTwo } = response;
         localStorage.setItem("gameId", gameId);
         setGameId(gameId);
-        setGameStarted(true);
+        // setGameStarted(true);
+        setGameStarted(GameStatus.In_Progress);
         setWaitingForPlayer(false);
         setNotificationMessage(
           `Player ${playerTwo.name} has joined your game. The game has started!`
@@ -202,12 +203,15 @@ function App() {
 
     const handleGameStateResponse = (response) => {
       if (response.type === "gameState") {
+        localStorage.setItem("gameSessionID", response.updateGame.gameId);
         const isCurrentPlayerOne = response.playerOneId === playerId;
         const isCurrentPlayerTwo = response.playerTwoId === playerId;
 
-        setGameStarted(response.status !== GameStatus.Finished);
+        setGameStarted(true);
         setIsPlayerOne(isCurrentPlayerOne);
         setIsPlayerTwo(isCurrentPlayerTwo);
+
+        // setSessionID(sessionID);
 
         if (isCurrentPlayerTwo) {
           setWaitingForPlayer(false);
@@ -254,19 +258,66 @@ function App() {
     };
   }, [isPlayerOne, playerId, gameId]);
 
+  // RE-ESTABLISH CONNECTION AND GAME STATE
+  useEffect(() => {
+    const storedSessionId = localStorage.getItem("sessionID");
+    console.log("===== storedSessionId =========>1", storedSessionId);
+
+    const storedGameId = localStorage.getItem("gameId");
+    console.log("===== gameId =========>", storedGameId);
+
+    const storedIsPlayerOne = localStorage.getItem("isPlayerOne") === "true";
+    const storedGameStarted = localStorage.getItem("gameStarted") === "true";
+
+    if (storedGameId && storedSessionId) {
+      console.log("===== EMITTING GAME STATE REQUEST FROM CLIENT ========= 1");
+      socket.emit("requestGameState", {
+        gameId: storedGameId,
+        sessionID: storedSessionId,
+      });
+    } else {
+      setGameStarted(storedGameStarted && storedIsPlayerOne);
+    }
+  }, []);
 
   useEffect(() => {
-    const session = sessionStorage.getItem("sessionID");
-    console.log("session ======>", session);
-  
+    const storedSessionId = localStorage.getItem("sessionID");
+    console.log("===== storedSessionId 2=========>", storedSessionId);
+
+    const storedPlayerId = localStorage.getItem("playerId");
+    const storedGameId = localStorage.getItem("gameId");
+
+    // Only set isPlayerOne or gameStarted based on explicit server validation
+    if (storedGameId && storedPlayerId && storedSessionId) {
+      console.log("===== EMITTING GAME STATE REQUEST FROM CLIENT ========= 1");
+
+      // Request current game state from the server to validate
+      socket.emit("requestGameState", {
+        gameId: storedGameId,
+        sessionID: storedSessionId,
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    const session = localStorage.getItem("sessionID");
+    console.log("==== *** session *** ======>", session);
+
     if (session) {
+      console.log(
+        "==== sending session to server to validate ======>",
+        session
+      );
+
       // Emit the validateSession event and handle the response through a callback
       socket.emit("validateSession", { sessionID: session }, (response) => {
-        console.log("session response =======>", response);
+        console.log("======SERVER session response =======>", response);
         if (response.valid) {
           updateGameStateFromResponse(response);
         } else {
-          sessionStorage.removeItem("sessionID");
+          if (response.hasOwnProperty("valid")) {
+            localStorage.removeItem("sessionID");
+          }
         }
         setIsLoading(false); // Update loading state regardless of validation result
       });
@@ -274,16 +325,7 @@ function App() {
       setIsLoading(false); // No session ID, not loading
     }
   }, [socket]); // Ensure socket is in the dependency array if it's stateful
-  
 
-  useEffect(() => {
-    if (isPlayerOne && !gameId) {
-      console.log(
-        "Player is Player One and no gameId exists, creating game..."
-      );
-      socket.emit("createGame", { playerId: playerId });
-    }
-  }, [isPlayerOne, gameId, playerId]);
 
   useEffect(() => {
     localStorage.setItem("board", JSON.stringify(board));
@@ -309,6 +351,10 @@ function App() {
     localStorage.removeItem("playerId");
     localStorage.removeItem("gameId");
     localStorage.removeItem("playerName");
+    localStorage.removeItem("sessionID")
+    localStorage.removeItem("gameSessionID")
+
+
 
     // player leave game
     socket.emit("leaveGame", { playerId, gameId });

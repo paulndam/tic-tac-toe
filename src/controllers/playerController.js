@@ -3,7 +3,7 @@ import { allPlayers, createPlayer, playerById } from "../services/player.js";
 
 export const postPlayer = async (data, socket,sessionID) => {
   try {
-    
+    console.log("======= data from post player controller ===========>",data)
     const { name, gameId } = data;
 
     if (!name) {
@@ -14,10 +14,14 @@ export const postPlayer = async (data, socket,sessionID) => {
       return;
     }
 
-    let player = await db.players.findOne({where:{name:name}});
+    let player;
 
-    if (!player) {
-      player = await createPlayer({ name });
+    player = await db.players.findOne({where:{name:name}});
+    console.log("======= player in post player controller ===========>",player)
+
+
+    if (!player || player === null) {
+      player = await createPlayer({name});
     }
 
     if (gameId) {
@@ -60,8 +64,11 @@ export const postPlayer = async (data, socket,sessionID) => {
         sessionID
       });
     } else {
+      console.log("=== confirming player is created and emitting response back to client ========")
+      console.log(player)
       socket.emit("playerResponse", { type: "playerCreated", player,sessionID });
     }
+    return player;
   } catch (error) {
     socket.emit("playerResponse", {
       type: "error",

@@ -5,6 +5,7 @@ import { checkWinCondition } from "../util/gameCondition.js";
 
 export const createGame = async (playerId) => {
   try {
+    console.log("player ID in create game service method =====>",playerId)
     // check if playerId exist in DB
     const idExist = await db.players.findOne({
         where:{playerId:playerId}
@@ -19,6 +20,7 @@ export const createGame = async (playerId) => {
         status:GameStatus.Pending,
         currentTurn: playerId
     })
+    console.log("new game created in service method =====>",newGame)
     return newGame
   } catch (error) {
     throw new AppError(400, `${error.message}`);

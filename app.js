@@ -75,15 +75,14 @@ export const validateSession = (sessionID) => {
 
 io.on('connection', (socket) => {
   console.log('A user connected', socket.id);
-  socket.on("createPlayer", async (data,callback) => {
+  socket.on("createPlayer", async (data) => {
+
+    console.log("===== server file data when creating player ========",data)
     const sessionID = generateSessionID()
     const player = await postPlayer(data,socket,sessionID)
-    if (player) {
-      sessions.set(sessionID, { playerId: player.playerId }); 
-      callback({ sessionID, player }); 
-    } else {
-      callback({ error: "Failed to create player" });
-    }
+    console.log("==== player in server file ======>",player)
+    sessions.set(sessionID,{playerId:player.playerId,gameId:null})
+
   })
 
   socket.on("getAllPlayers", async (data) => {
@@ -95,17 +94,29 @@ io.on('connection', (socket) => {
   })
 
   // Handling the creation of a game
-  socket.on('createGame', async (data,callback) => {
-    const sessionGameId = generateSessionID()
-    const game = await postGame(data,socket,sessionGameId)
-    if(game){
-      sessions.set(sessionGameId,{gameId:game.gameId})
-      callback({sessionGameId,game})
-    }else{
-      callback({error:"Failed to create and start game"})
-    }
+  socket.on('createGame', async (data) => {
+    console.log("data in server file when creating game ========>",data)
 
-    socket.join(game)
+    const sessionGameId = generateSessionID()
+
+    // set up initial game state
+    sessions.set(sessionGameId, {
+      players: [socket.id],
+      state: 'waiting for player',
+    });
+
+    const game = await postGame(data,socket,sessionGameId)
+    console.log("game ===>",game)
+
+    socket.join(sessionGameId);
+
+    socket.emit("gameResponse", { 
+      type: "gameCreated", 
+      gameId: sessionGameId, // Using sessionGameId as gameId for simplicity
+      message: "Game created successfully. Waiting for a player to join.",
+    });
+
+
       
   });
 
@@ -115,12 +126,15 @@ io.on('connection', (socket) => {
 
   // Handling a player joining a game
   socket.on('joinGame', async (data) => {
-    await joinGameHandler(data, socket,io);
+    console.log("data in server file when joining game ========>", data);
+    await joinGameHandler(data, socket, io);
   });
+  
 
   // game state
   socket.on("requestGameState", async ({ gameId,sessionID }) => {
-    await gameState(gameId, socket); 
+    console.log("====== calling request game state in server entry file =========",gameId, sessionID)
+    await gameState({gameId,sessionID}, socket); 
   });
 
   // reset game
@@ -134,6 +148,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on("validateSession", async ({ sessionID }, callback) => {
+    console.log("==== session received from client =========",sessionID)
     try {
       if (!sessionID || !validateSession(sessionID)) {
         return callback({ valid: false });
@@ -155,10 +170,10 @@ io.on('connection', (socket) => {
         playerId: player.id,
         playerName: player.name,
         gameId: game.id,
-        board: game.board, // Ensure this data is structured as expected by the client
+        board: game.board, 
         isPlayerOne: player.id === game.playerOneId,
         gameStarted: game.started,
-        // Additional necessary state information...
+        
       });
     } catch (error) {
       console.error("Error validating session:", error);
