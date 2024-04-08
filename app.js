@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 import cors from "cors";
 import express from "express";
-import db from "./src/models/index.js";
+import db from "./server/src/models/index.js";
 import bodyParser from "body-parser";
 import cookieParser from "cookie-parser";
 import { createServer } from "http";
@@ -11,7 +11,7 @@ import {
   getAllPlayers,
   getPlayer,
   getPlayerInfo,
-} from "./src/controllers/playerController.js";
+} from "./server/src/controllers/playerController.js";
 import {
   postGame,
   joinGameHandler,
@@ -21,7 +21,7 @@ import {
   getGameInfo,
   listAllWinRecords,
   restartGame,
-} from "./src/controllers/gameController.js";
+} from "./server/src/controllers/gameController.js";
 
 dotenv.config();
 

@@ -417,6 +417,12 @@ function App() {
     setGameId("");
   };
 
+  const handleResetGame = () => {
+    if(gameId){
+      setBoard(Array(9).fill(null));
+    }
+  }
+
   if (isLoading) {
     return <div>Loading...</div>;
   }
@@ -502,7 +508,7 @@ function App() {
             </div>
           )}
 
-          <button className="reset-game-btn" onClick={handleRestartGame}>
+          <button className="reset-game-btn" onClick={handleResetGame}>
             Reset Game
           </button>
 

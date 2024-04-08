@@ -44,7 +44,7 @@ env variables to use are below:
 
 start the backend server
 
-**\*** npm run start-server **\*\*\***
+**\*** npm start **\*\*\***
 
 In a separate terminal, start the React frontend:
 

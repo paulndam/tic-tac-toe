@@ -1,4 +1,4 @@
-import { sessions, validateSession } from "../../app.js";
+import { sessions, validateSession } from "../../../app.js";
 import { GameStatus } from "../models/game.js";
 import db from "../models/index.js";
 import {
