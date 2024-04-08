@@ -35,8 +35,6 @@ export const postGame = async (data, socket, gameSessionId) => {
     const newGame = await createGame(newPlayerId);
 
     if (!newGame) {
-      // This branch might not be necessary if createGame throws an error for failures
-      console.error("Failed to create a new game.");
       socket.emit("gameResponse", {
         type: "error",
         message: "Failed to create a new game.",
@@ -52,7 +50,6 @@ export const postGame = async (data, socket, gameSessionId) => {
       gameSessionId,
     });
 
-    // broadcast event to all players about new game created.
     socket.broadcast.emit("gameResponse", {
       type: "newGameAvailable",
       newGame,
@@ -72,7 +69,6 @@ export const restartGame = async (data, socket,io) => {
   try {
     const { gameId } = data;
 
-    // Fetch the old game to get player IDs
     const oldGame = await db.games.findByPk(gameId);
     if (!oldGame) {
       socket.emit("gameResponse", {
@@ -82,7 +78,6 @@ export const restartGame = async (data, socket,io) => {
       return;
     }
 
-    // Create a new game with the same players
     const newGame = await db.games.create({
       playerOneId: oldGame.playerOneId,
       playerTwoId: oldGame.playerTwoId,
@@ -90,7 +85,6 @@ export const restartGame = async (data, socket,io) => {
       board: JSON.stringify(Array(9).fill(null)),
     });
 
-    // Notify the players about the new game
     io.to(oldGame.playerOneId).emit("gameRestarted", {
       newGameId: newGame.gameId,
     });
@@ -100,7 +94,6 @@ export const restartGame = async (data, socket,io) => {
       });
     }
 
-    // Leave the old game room and join the new one
     socket.leave(gameId);
     socket.join(newGame.gameId);
 
@@ -132,7 +125,6 @@ export const resetGame = async (data, socket) => {
 
     await gameReset(gameId);
 
-    // After resetting the game, emit an event to both players in the game room
     io.to(gameId).emit("gameResetResponse", { type: "gameReset" });
   } catch (error) {
     socket.emit("gameResponse", {
@@ -185,7 +177,6 @@ export const joinGameHandler = async (data, socket, io) => {
 
     socket.join(gameId);
 
-    // Notify all clients in the game room about the new player joining
     io.to(gameId).emit("gameJoinedResponse", {
       type: "gameJoined",
       updateGame,
