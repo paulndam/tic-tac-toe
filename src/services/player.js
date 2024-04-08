@@ -3,12 +3,7 @@ import { AppError } from "../util/errorHandler.js";
 
 export const createPlayer = async ({name}) => {
   try {
-
-    const checkUserNameExist = await db.players.findOne({where:{name:name}})
-
-    if(checkUserNameExist){
-      throw new AppError(400,"Name is already taken. Please enter a different name")
-    }
+    console.log("name in the createPlayer service method====>",name)
 
     const newPlayer = await db.players.create({ name });
 

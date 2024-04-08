@@ -5,6 +5,36 @@
   justify-content: center;
 }
 
+.waiting{
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 70vh; /* Take full viewport height */
+    background-image: url(https://img.freepik.com/free-vector/forest-scene-with-various-forest-trees_1308-58896.jpg?w=2000); 
+    background-size: cover; 
+    background-position: center; 
+    background-repeat: no-repeat; 
+}
+
+
+.waiting-message {
+  margin: 20px auto;
+  padding: 15px;
+  max-width: 90%;
+  text-align: center;
+  background-color: #f4f4f4; 
+  color: #090304; 
+  border: 1px solid #f5c6cb; 
+  border-radius: 8px; 
+  font-family: 'Arial', sans-serif; 
+  font-size: 16px; 
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); 
+  transition: background-color 0.3s ease-in-out; 
+}
+
+
+
 .error-message {
   margin: 20px auto;
   padding: 15px;
@@ -58,4 +88,95 @@ input[type="text"] {
   border-radius: 5px;
   background-color: #df3737;
   color: white;
+}
+
+
+.winner-notification {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.75); /* Semi-transparent background */
+  z-index: 10; /* Ensure it's above other content */
+}
+
+.winner-message {
+  padding: 20px;
+  border-radius: 8px;
+  background-color: #ffffff;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  max-width: 400px;
+}
+
+.winner-message h3 {
+  margin-top: 0;
+  color: #333;
+}
+
+.winner-message p {
+  color: #555;
+  margin: 20px 0;
+}
+
+.winner-message button {
+  background-color: #007bff;
+  color: #ffffff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.winner-message button:hover {
+  background-color: #0056b3;
+}
+
+
+.game-header {
+  background-color: #f0f0f0;
+  padding: 20px;
+  text-align: center;
+}
+
+.game-header h1 {
+  margin: 0;
+  color: #333;
+}
+
+.player-info {
+  margin-top: 10px;
+  padding: 10px;
+  color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.player-one {
+  background-color: #007bff;
+}
+
+.player-two {
+  background-color: #28a745;
+}
+
+
+.turn-info {
+  background-color: #f2f4f8;
+  border-left: 5px solid #4CAF50; /* Green for "Your turn" */
+  margin: 20px 0;
+  padding: 10px;
+  text-align: center;
+  font-size: 16px;
+  color: #333;
+}
+
+.turn-info.waiting-for-turn {
+  border-left-color: #FF9800; /* Orange for waiting */
+  
 }

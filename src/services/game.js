@@ -17,7 +17,7 @@ export const createGame = async (playerId) => {
 
     const newGame = await db.games.create({
         playerOneId:playerId,
-        status:GameStatus.Pending,
+        status:GameStatus.In_Progress,
         currentTurn: playerId
     })
     console.log("new game created in service method =====>",newGame)
@@ -95,56 +95,122 @@ export const joinGame = async (gameId,playerId) => {
 }
 
 
-export const makeMove = async(gameId,playerId,position) => {
-  try{
+// export const makeMove = async(gameId,playerId,position) => {
+//   try{
 
+//     const game = await db.games.findByPk(gameId);
+
+//     if(!game){
+//       throw new AppError(404,'Game not found');
+//     }
+
+//     if(game.dataValues.status !== GameStatus.In_Progress){
+//       throw new AppError(400,"Game is currently not in progress")
+//     }
+
+//     if(game.dataValues.currentTurn !== playerId){
+//       throw new AppError(400,"It's not your turn yet.")
+//     }
+
+//     if(position < 0 || position > 8){
+//       throw new AppError(400, "Invalid move position")
+//     }
+
+//     // converting board string back to array for manipulation.
+//     let board = JSON.parse(game.dataValues.board);
+
+//     if(board[position] !== null) throw new AppError(400,"Position already taken")
+
+//     // updating board.
+//     board[position] = game.dataValues.currentTurn === game.dataValues.playerOneId ? 'X' : 'O';
+
+//     // checking win or draw conditions.
+//     const result = checkWinCondition(board);
+
+//     if(result === 'X' || result === 'O'){
+//       game.dataValues.status = GameStatus.Finished;
+//       game.dataValues.winner = playerId;
+//     }else if (result === 'Draw'){
+//       game.dataValues.status = GameStatus.Finished
+//     }else{
+//       // switching turn for other players;
+//       game.dataValues.currentTurn = game.dataValues.currentTurn === game.dataValues.playerOneId ? game.dataValues.playerTwoId : game.dataValues.playerOneId
+//     }
+
+//     // converts board back to string
+//     game.dataValues.board = JSON.stringify(board)
+
+//     await game.save()
+
+//     return game
+
+//   }catch (error) {
+//     throw new AppError(400, `${error.message}`);
+//   }
+// }
+
+
+export const makeMove = async (gameId, playerId, position) => {
+  try {
     const game = await db.games.findByPk(gameId);
 
-    if(!game){
-      throw new AppError(404,'Game not found');
+    if (!game) {
+      throw new AppError(404, 'Game not found');
     }
 
-    if(game.status !== GameStatus.In_Progress){
-      throw new AppError(400,"Game is currently not in progress")
+    // Ensure game is in progress
+    if (game.status !== GameStatus.In_Progress) {
+      throw new AppError(400, "Game is currently not in progress");
     }
 
-    if(game.currentTurn !== playerId){
-      throw new AppError(400,"It's not your turn yet.")
+    // Ensure it's the current player's turn
+    if (game.currentTurn !== playerId) {
+      throw new AppError(400, "It's not your turn yet.");
     }
 
-    if(position < 0 || position > 8){
-      throw new AppError(400, "Invalid move position")
+    // Validate position
+    if (position < 0 || position > 8) {
+      throw new AppError(400, "Invalid move position");
     }
 
-    // converting board string back to array for manipulation.
+    // Convert the board string back to an array for manipulation
     let board = JSON.parse(game.board);
 
-    if(board[position] !== null) throw new AppError(400,"Position already taken")
-
-    // updating board.
-    board[position] = game.currentTurn === game.playerOneId ? 'X' : 'O';
-
-    // checking win or draw conditions.
-    const result = checkWinCondition(board);
-
-    if(result === 'X' || result === 'O'){
-      game.status = GameStatus.Finished;
-      game.winner = playerId;
-    }else if (result === 'Draw'){
-      game.status = GameStatus.Finished
-    }else{
-      // switching turn for other players;
-      game.currentTurn = game.currentTurn === game.playerOneId ? game.playerTwoId : game.playerOneId
+    // Check if position is already taken
+    if (board[position] !== null) {
+      throw new AppError(400, "Position already taken");
     }
 
-    // converts board back to string
-    game.board = JSON.stringify(board)
+    // Update the board for the current move
+    board[position] = game.currentTurn === game.playerOneId ? 'X' : 'O';
 
-    await game.save()
+    // Checking win or draw conditions
+    const result = checkWinCondition(board);
 
-    return game
+    if (result === 'X' || result === 'O') {
+      game.set({
+        status: GameStatus.Finished,
+        winner: playerId,
+      });
+    } else if (result === 'Draw') {
+      game.set({
+        status: GameStatus.Finished,
+        winner: null, // Or however you wish to denote a draw
+      });
+    } else {
+      // Switching turns for the players
+      game.set({
+        currentTurn: game.currentTurn === game.playerOneId ? game.playerTwoId : game.playerOneId,
+      });
+    }
 
-  }catch (error) {
+    // Update the board and save changes
+    game.set({ board: JSON.stringify(board) });
+    await game.save();
+
+    return game;
+
+  } catch (error) {
     throw new AppError(400, `${error.message}`);
   }
-}
+};

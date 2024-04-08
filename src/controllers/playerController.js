@@ -1,9 +1,9 @@
 import db from "../models/index.js";
 import { allPlayers, createPlayer, playerById } from "../services/player.js";
+import { AppError } from "../util/errorHandler.js";
 
-export const postPlayer = async (data, socket,sessionID) => {
+export const postPlayer = async (data, socket, sessionID) => {
   try {
-    console.log("======= data from post player controller ===========>",data)
     const { name, gameId } = data;
 
     if (!name) {
@@ -14,15 +14,13 @@ export const postPlayer = async (data, socket,sessionID) => {
       return;
     }
 
-    let player;
+    const existingPlayer = await db.players.findOne({ where: { name: name } });
 
-    player = await db.players.findOne({where:{name:name}});
-    console.log("======= player in post player controller ===========>",player)
-
-
-    if (!player || player === null) {
-      player = await createPlayer({name});
+    if (existingPlayer) {
+      throw new AppError(400,"Username already exist")
     }
+
+    const newPlayer = await createPlayer({ name });
 
     if (gameId) {
       const game = await db.games.findOne({ where: { gameId } });
@@ -35,7 +33,7 @@ export const postPlayer = async (data, socket,sessionID) => {
         return;
       }
 
-      if (game.playerTwoId) {
+      if (game.dataValues.playerTwoId) {
         socket.emit("playerResponse", {
           type: "error",
           message: "Game is already full",
@@ -43,32 +41,33 @@ export const postPlayer = async (data, socket,sessionID) => {
         return;
       }
 
-      game.playerTwoId = player.playerId;
+      game.dataValues.playerTwoId = newPlayer.dataValues.playerId;
       await game.save();
 
-      socket.join(gameId); // Join the socket.io room for the game
+      socket.join(gameId); 
 
-      // Notify the other player in the game that a new player has joined
       socket.to(gameId).emit("gameJoinedResponse", {
         type: "gameJoined",
         gameId: gameId,
-        playerTwo: player,
-        sessionID
+        playerTwo: newPlayer,
+        sessionID,
       });
 
-      // Confirm to the joining player that they've been added
       socket.emit("playerResponse", {
         type: "joinedGame",
         game,
-        playerTwo: player,
-        sessionID
+        playerTwo: newPlayer,
+        sessionID,
       });
     } else {
-      console.log("=== confirming player is created and emitting response back to client ========")
-      console.log(player)
-      socket.emit("playerResponse", { type: "playerCreated", player,sessionID });
+      console.log(newPlayer);
+      socket.emit("playerResponse", {
+        type: "playerCreated",
+        newPlayer,
+        sessionID,
+      });
     }
-    return player;
+    return newPlayer;
   } catch (error) {
     socket.emit("playerResponse", {
       type: "error",
@@ -119,16 +118,14 @@ export const getPlayer = async (data, socket) => {
   }
 };
 
-
-
 export const getPlayerInfo = async (playerId) => {
   try {
     const player = await db.players.findByPk(playerId);
     if (!player) {
       console.log("Player not found");
-      return null; // or handle as you see fit
+      return null; 
     }
-    return player; // Adjust this as needed based on your data model
+    return player; 
   } catch (error) {
     console.error("Error fetching player:", error);
     throw new Error("Error fetching player");

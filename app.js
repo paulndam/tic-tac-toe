@@ -6,8 +6,22 @@ import bodyParser from "body-parser";
 import cookieParser from "cookie-parser";
 import { createServer } from "http";
 import { Server, Socket } from "socket.io";
-import { postPlayer,getAllPlayers,getPlayer, getPlayerInfo } from "./src/controllers/playerController.js";
-import { postGame,joinGameHandler,makeMoveHandler, listAllGames, gameState, getGameInfo } from "./src/controllers/gameController.js";
+import {
+  postPlayer,
+  getAllPlayers,
+  getPlayer,
+  getPlayerInfo,
+} from "./src/controllers/playerController.js";
+import {
+  postGame,
+  joinGameHandler,
+  makeMoveHandler,
+  listAllGames,
+  gameState,
+  getGameInfo,
+  listAllWinRecords,
+  restartGame,
+} from "./src/controllers/gameController.js";
 
 dotenv.config();
 
@@ -16,7 +30,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // creates express app.
-app.use(cors({origin:'http://localhost:3000',credentials:true}))
+app.use(cors({ origin: "http://localhost:3000", credentials: true }));
 app.options("*", cors());
 
 app.use(express.json());
@@ -44,14 +58,13 @@ db.sequelize
     console.log(`ERROR: ${errorMessage}`);
   });
 
-
 const httpServer = createServer(app);
-const io = new Server(httpServer,{
-  cors:{
-    origin:"http://localhost:3000",
+const io = new Server(httpServer, {
+  cors: {
+    origin: "http://localhost:3000",
     methods: ["*"],
-    credentials:true
-  }
+    credentials: true,
+  },
 });
 
 const server = httpServer.listen(PORT, () => {
@@ -72,115 +85,121 @@ export const validateSession = (sessionID) => {
   return sessions.has(sessionID);
 };
 
-
-io.on('connection', (socket) => {
-  console.log('A user connected', socket.id);
+io.on("connection", (socket) => {
+  console.log("A user connected", socket.id);
   socket.on("createPlayer", async (data) => {
-
-    console.log("===== server file data when creating player ========",data)
-    const sessionID = generateSessionID()
-    const player = await postPlayer(data,socket,sessionID)
-    console.log("==== player in server file ======>",player)
-    sessions.set(sessionID,{playerId:player.playerId,gameId:null})
-
-  })
+    const sessionID = generateSessionID();
+    const player = await postPlayer(data, socket, sessionID);
+    sessions.set(sessionID, { playerId: player.playerId, gameId: null });
+  });
 
   socket.on("getAllPlayers", async (data) => {
-    await getAllPlayers(socket)
-  })
+    await getAllPlayers(socket);
+  });
 
   socket.on("getPlayer", async (data) => {
-    await getPlayer(data.playerId,socket)
-  })
+    await getPlayer(data.playerId, socket);
+  });
 
   // Handling the creation of a game
-  socket.on('createGame', async (data) => {
-    console.log("data in server file when creating game ========>",data)
-
-    const sessionGameId = generateSessionID()
+  socket.on("createGame", async (data) => {
+    const sessionGameId = generateSessionID();
 
     // set up initial game state
     sessions.set(sessionGameId, {
       players: [socket.id],
-      state: 'waiting for player',
+      state: "waiting for player",
     });
 
-    const game = await postGame(data,socket,sessionGameId)
-    console.log("game ===>",game)
+    const game = await postGame(data, socket, sessionGameId);
 
-    socket.join(sessionGameId);
+    const gameId = game.dataValues.gameId;
 
-    socket.emit("gameResponse", { 
-      type: "gameCreated", 
-      gameId: sessionGameId, // Using sessionGameId as gameId for simplicity
+    socket.join(gameId);
+
+    socket.emit("gameResponse", {
+      type: "gameCreated",
+      gameId: gameId,
       message: "Game created successfully. Waiting for a player to join.",
     });
-
-
-      
-  });
-
-  socket.on("getAllGames", async(data) => {
-    await listAllGames(socket)
-  })
-
-  // Handling a player joining a game
-  socket.on('joinGame', async (data) => {
-    console.log("data in server file when joining game ========>", data);
-    await joinGameHandler(data, socket, io);
-  });
-  
-
-  // game state
-  socket.on("requestGameState", async ({ gameId,sessionID }) => {
-    console.log("====== calling request game state in server entry file =========",gameId, sessionID)
-    await gameState({gameId,sessionID}, socket); 
   });
 
   // reset game
-  socket.on("resetGame", async (data) => {
-    await resetGame(data, socket);
+  socket.on("restartGame", async (data) => {
+    await restartGame(data, socket,io);
+  });
+
+  socket.on("getAllGames", async (data) => {
+    await listAllGames(socket);
+  });
+
+  // Handling a player joining a game
+  socket.on("joinGame", async (data) => {
+    await joinGameHandler(data, socket, io);
+  });
+
+  // game state
+  socket.on("requestGameState", async ({ gameId, sessionID }) => {
+    await gameState({ gameId, sessionID }, socket);
+  });
+
+  socket.on("winningRecords", async (data) => {
+    await listAllWinRecords(data, socket, io);
   });
 
   // Handling a player making a move
-  socket.on('makeMove', async (data) => {
-    makeMoveHandler(data, socket,io);
+  socket.on("makeMove", async (data) => {
+    makeMoveHandler(data, socket, io);
   });
 
   socket.on("validateSession", async ({ sessionID }, callback) => {
-    console.log("==== session received from client =========",sessionID)
     try {
       if (!sessionID || !validateSession(sessionID)) {
         return callback({ valid: false });
       }
-  
+
       const sessionData = sessions.get(sessionID);
-      if (!sessionData) return callback({ valid: false });
-  
+      if (!sessionData || !sessionData.playerId)
+        return callback({ valid: false });
+
       const { playerId, gameId } = sessionData;
       const player = await getPlayerInfo(playerId);
-      const game = await getGameInfo(gameId);
-  
-      if (!player || !game) {
+      if (!player) {
         return callback({ valid: false });
       }
-  
+
+      // Game validation is only attempted if a gameId exists in the session.
+      let gameResponse = {};
+      if (gameId) {
+        const game = await getGameInfo(gameId);
+        if (!game) {
+          // If the game is not found, it's not treated as a session invalidation scenario.
+          // This allows for player validation to succeed even if the game details are not available.
+          console.log(`Game ${gameId} not found for session ${sessionID}.`);
+        } else {
+          gameResponse = {
+            gameId: game.id,
+            board: game.board,
+            isPlayerOne: player.id === game.playerOneId,
+            gameStarted: game.started,
+          };
+        }
+      }
+
       callback({
         valid: true,
         playerId: player.id,
         playerName: player.name,
-        gameId: game.id,
-        board: game.board, 
-        isPlayerOne: player.id === game.playerOneId,
-        gameStarted: game.started,
-        
+        ...gameResponse,
       });
     } catch (error) {
       console.error("Error validating session:", error);
-      callback({ valid: false, error: "An error occurred during session validation." });
+      callback({
+        valid: false,
+        error: "An error occurred during session validation.",
+      });
     }
   });
-  
 
   socket.on("endSession", ({ sessionID }) => {
     sessions.delete(sessionID); // Remove session data
@@ -188,11 +207,10 @@ io.on('connection', (socket) => {
 
   // Add more event handlers as needed
 
-  socket.on('disconnect', () => {
-      console.log('User disconnected', socket.id);
+  socket.on("disconnect", () => {
+    console.log("User disconnected", socket.id);
   });
 });
-
 
 process.on("unhandledRejection", (error) => {
   const errorMessage =
