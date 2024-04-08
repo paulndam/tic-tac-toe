@@ -366,10 +366,6 @@ function App() {
     const session = localStorage.getItem("sessionID");
 
     if (session) {
-      console.log(
-        "==== sending session to server to validate ======>",
-        session
-      );
 
       socket.emit("validateSession", { sessionID: session }, (response) => {
         if (response.valid) {
