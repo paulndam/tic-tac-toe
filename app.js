@@ -76,6 +76,8 @@ const server = httpServer.listen(PORT, () => {
 
 export const sessions = new Map();
 
+export const playerSocketMap = new Map();
+
 export const generateSessionID = () => {
   // Simple generation logic; consider using a more robust method in production
   return `sess_${Math.random().toString(36).substr(2, 9)}`;
@@ -90,7 +92,14 @@ io.on("connection", (socket) => {
   socket.on("createPlayer", async (data) => {
     const sessionID = generateSessionID();
     const player = await postPlayer(data, socket, sessionID);
-    sessions.set(sessionID, { playerId: player.playerId, gameId: null });
+
+    sessions.set(sessionID, {
+      playerId: player.playerId,
+      socketId: socket.id,
+      gameId: null,
+    });
+
+    playerSocketMap.set(player.playerId, socket.id);
   });
 
   socket.on("getAllPlayers", async (data) => {
@@ -126,7 +135,7 @@ io.on("connection", (socket) => {
 
   // reset game
   socket.on("restartGame", async (data) => {
-    await restartGame(data, socket,io);
+    await restartGame(data, socket, io);
   });
 
   socket.on("getAllGames", async (data) => {
@@ -173,8 +182,6 @@ io.on("connection", (socket) => {
       if (gameId) {
         const game = await getGameInfo(gameId);
         if (!game) {
-          // If the game is not found, it's not treated as a session invalidation scenario.
-          // This allows for player validation to succeed even if the game details are not available.
           console.log(`Game ${gameId} not found for session ${sessionID}.`);
         } else {
           gameResponse = {
@@ -202,10 +209,8 @@ io.on("connection", (socket) => {
   });
 
   socket.on("endSession", ({ sessionID }) => {
-    sessions.delete(sessionID); // Remove session data
+    sessions.delete(sessionID);
   });
-
-  // Add more event handlers as needed
 
   socket.on("disconnect", () => {
     console.log("User disconnected", socket.id);

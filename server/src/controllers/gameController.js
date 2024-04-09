@@ -1,5 +1,4 @@
-import { Sequelize } from "sequelize";
-import { sessions, validateSession } from "../../../app.js";
+import { playerSocketMap, sessions, validateSession } from "../../../app.js";
 import { GameStatus } from "../models/game.js";
 import db from "../models/index.js";
 import {
@@ -66,11 +65,12 @@ export const postGame = async (data, socket, gameSessionId) => {
   }
 };
 
-export const restartGame = async (data, socket,io) => {
+export const restartGame = async (data, socket, io) => {
   try {
     const { gameId } = data;
 
     const oldGame = await db.games.findByPk(gameId);
+
     if (!oldGame) {
       socket.emit("gameResponse", {
         type: "error",
@@ -86,26 +86,32 @@ export const restartGame = async (data, socket,io) => {
       board: JSON.stringify(Array(9).fill(null)),
     });
 
-    io.to(oldGame.playerOneId).emit("gameRestarted", {
-      newGameId: newGame.gameId,
-    });
-    if (oldGame.playerTwoId) {
-      io.to(oldGame.playerTwoId).emit("gameRestarted", {
-        newGameId: newGame.gameId,
+      [(oldGame.playerOneId, oldGame.playerTwoId)].forEach((playerId) => {
+        if (playerSocketMap.has(playerId)) {
+          const socketId = playerSocketMap.get(playerId);
+          if (socketId) {
+            io.to(socketId).emit("gameRestarted", {
+              type: "gameRestarted",
+              newGameId: newGame.gameId,
+              isPlayerOne: playerId === newGame.playerOneId,
+              message: "A new game has started. Good luck! 🤠 🤠 🤠",
+            });
+          }
+        } else {
+          console.log(`No socket ID found for Player ID ${playerId}`);
+        }
       });
-    }
 
-    socket.leave(gameId);
-    socket.join(newGame.gameId);
-
-    socket.emit("gameRestartedResponse", {
-      type: "gameRestarted",
-      message: "Game has been restarted.",
-      newGameId: newGame.gameId,
+    sessions.forEach((session, sessionId) => {
+      if (
+        [oldGame.playerOneId, oldGame.playerTwoId].includes(session.playerId)
+      ) {
+        sessions.set(sessionId, { ...session, gameId: newGame.gameId });
+      }
     });
   } catch (error) {
     console.error("Failed to restart the game:", error);
-    socket.emit("gameRestartedResponse", {
+    socket.emit("gameResponse", {
       type: "error",
       message: "Failed to restart the game.",
     });
@@ -150,9 +156,7 @@ export const listAllGames = async (socket) => {
   }
 };
 
-
 export const joinGameHandler = async (data, socket, io) => {
-
   const { sessionID, gameId } = data;
 
   if (!validateSession(sessionID)) {
@@ -195,52 +199,42 @@ export const joinGameHandler = async (data, socket, io) => {
   }
 };
 
+
+
 export const makeMoveHandler = async (data, socket, io) => {
   try {
     const { playerId, position, gameId } = data;
 
-    if (typeof position !== "number") {
-      socket.emit("gameMoveResponse", {
-        type: "error",
-        message: "Position must be a number.",
-      });
-      return;
-    }
-
-    if (!playerId || position === undefined) {
-      socket.emit("gameMoveResponse", {
-        type: "error",
-        message: "Player ID and position are required.",
-      });
-      return;
-    }
-
     const gameStatus = await makeMove(gameId, playerId, position);
 
-    const gameWinnerName = await db.players.findByPk(gameStatus.winner);
-    console.log("gameWinnerName ======>",gameWinnerName)
+    if (gameStatus.dataValues.status === 'finished') {
+      let message = "It's a draw!"; 
 
-    if (gameStatus.status === GameStatus.Finished) {
+      if (gameStatus.dataValues.winner) {
+        const gameWinnerName = await db.players.findByPk(gameStatus.dataValues.winner);
+        message = `${gameWinnerName.dataValues.name} wins!`;
+      }
+
       io.to(gameId).emit("gameOver", {
         type: "gameOver",
         status: gameStatus.dataValues.status,
-        winner: gameWinnerName.dataValues.name,
-        message:
-          gameWinnerName.dataValues.name
-            ? `${gameWinnerName.dataValues.name} wins!`
-            : "It's a draw!",
+        message: message,
+        board: gameStatus.dataValues.board,
       });
     } else {
-      io.to(gameId).emit("gameMoveResponse", { type: "moveMade", gameStatus });
+      io.to(gameId).emit("gameMoveResponse", {
+        type: "moveMade",
+        gameStatus: gameStatus.dataValues,
+      });
     }
-
   } catch (error) {
     socket.emit("gameMoveResponse", {
       type: "error",
-      message: error.message || "An unexpected error occurred.", 
+      message: error.message || "An unexpected error occurred.",
     });
   }
 };
+
 
 export const gameState = async ({ gameId, sessionID }, socket) => {
   if (!validateSession(sessionID)) {
@@ -308,40 +302,37 @@ export const getGameInfo = async (gameId) => {
   }
 };
 
-
 export const listAllWinRecords = async (_, socket, io) => {
   try {
-    // Fetch all finished games
     const finishedGames = await db.games.findAll({
-      where: { status: 'finished', winner: { [db.Sequelize.Op.ne]: null } },
+      where: { status: "finished", winner: { [db.Sequelize.Op.ne]: null } },
       include: [
-        { model: db.players, as: 'PlayerOne', attributes: ['name'] },
-        { model: db.players, as: 'PlayerTwo', attributes: ['name'] }
-      ]
+        { model: db.players, as: "PlayerOne", attributes: ["name"] },
+        { model: db.players, as: "PlayerTwo", attributes: ["name"] },
+      ],
     });
 
-    // empty object to track wins for each player
     let winCounts = {};
 
-    // Iterate over finished games to aggregate wins
-    finishedGames.forEach(game => {
-      // check if the winner is PlayerOne or PlayerTwo
-      const winnerName = game.winner === game.playerOneId ? game.PlayerOne.name : game.PlayerTwo.name;
+    finishedGames.forEach((game) => {
+      const winnerName =
+        game.winner === game.playerOneId
+          ? game.PlayerOne.name
+          : game.PlayerTwo.name;
 
-      // If player isn't in winCounts yet, add them
       if (!winCounts[winnerName]) {
         winCounts[winnerName] = 0;
       }
 
-      // Increment the win count for the winning player
       winCounts[winnerName]++;
     });
 
-    // Converting winCounts to an array of objects for emission
-    const records = Object.keys(winCounts).map(playerName => ({
-      playerName,
-      wins: winCounts[playerName]
-    })).sort((a, b) => b.wins - a.wins); 
+    const records = Object.keys(winCounts)
+      .map((playerName) => ({
+        playerName,
+        wins: winCounts[playerName],
+      }))
+      .sort((a, b) => b.wins - a.wins);
 
     io.emit("winningRecordsResponse", { type: "winRecords", records });
   } catch (error) {

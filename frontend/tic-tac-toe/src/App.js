@@ -105,11 +105,11 @@ function App() {
 
   const handleRestartGame = useCallback(() => {
     if (gameId) {
-      socket.emit("restartGame", { gameId });
+      socket.emit("restartGame", { gameId, playerId });
     } else {
       throw new Error("No game found to restart");
     }
-  }, [gameId]);
+  }, [gameId, playerId]);
 
   useEffect(() => {
     const storedPlayerId = localStorage.getItem("playerId");
@@ -178,7 +178,6 @@ function App() {
         setGameId(game.gameId);
         setGameStarted(true);
         setIsPlayerTwo(true);
-
         setWaitingForPlayer(false);
         setNotificationMessage(
           `Joined game successfully. Your game ID: ${game.gameId}. Waiting for the game to start.`
@@ -199,7 +198,7 @@ function App() {
         setWaitingForPlayer(true);
       }
       if (res.type === "gameRestarted") {
-        handleRestartGame();
+        handleRestartGame(res.newGame.gameId);
       }
     };
 
@@ -210,7 +209,6 @@ function App() {
         setGameId(response.updateGame.gameId);
         setPlayerId(playerTwo.playerId);
         setIsPlayerTwo(true);
-        setPlayerName(playerTwo.name);
         setGameStarted(true);
         setGameStarted(GameStatus.In_Progress);
         setWaitingForPlayer(false);
@@ -269,8 +267,6 @@ function App() {
     };
 
     const handleGameOver = (response) => {
-      console.log("handle game over response ======>", response);
-
       if (response.type === "gameOver") {
         setGameOver(true);
         setWinnerMessage(response.message);
@@ -282,19 +278,20 @@ function App() {
     };
 
     const handleGameRestarted = (response) => {
-      console.log("data for game restarted ======>", response);
       if (response.type === "gameRestarted") {
-        setGameOver(false);
-        setWinnerMessage("");
-        setNotificationMessage("The game has restarted. Good luck!");
+        setGameId(response.newGameId);
         setBoard(Array(9).fill(null));
         setGameStarted(true);
-        setGameId(response.newGameId);
+        setGameOver(false);
+        setWinnerMessage("");
+        setIsPlayerOne(response.isPlayerOne);
+        setIsPlayerTwo(!response.isPlayerOne);
+        setWaitingForPlayer(!response.isPlayerOne);
+        setNotificationMessage(response.message);
       }
     };
 
     const handleShowWinRecords = (response) => {
-      console.log("win record response ====>",response)
       if (response.type === "winRecords") {
         const { records } = response;
         setWinRecords(records);
@@ -426,7 +423,7 @@ function App() {
   if (isLoading) {
     return <div className="loader">Loading...</div>;
   }
-
+  console.log("my turn ====>", myTurn);
   return (
     <div className="App">
       {errorMessage && <div className="error-message">{errorMessage}</div>}
@@ -483,7 +480,7 @@ function App() {
               </p>
             ) : (
               <p>
-                Waiting for <span className="player-name">{playerName}</span> to
+                Waiting for <span className="player-name">Challenger</span> to
                 make a move...
               </p>
             )}
