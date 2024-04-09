@@ -1,3 +1,4 @@
+import { Sequelize } from "sequelize";
 import { sessions, validateSession } from "../../../app.js";
 import { GameStatus } from "../models/game.js";
 import db from "../models/index.js";
@@ -217,15 +218,16 @@ export const makeMoveHandler = async (data, socket, io) => {
     const gameStatus = await makeMove(gameId, playerId, position);
 
     const gameWinnerName = await db.players.findByPk(gameStatus.winner);
+    console.log("gameWinnerName ======>",gameWinnerName)
 
     if (gameStatus.status === GameStatus.Finished) {
       io.to(gameId).emit("gameOver", {
         type: "gameOver",
-        status: gameStatus.status,
-        winner: gameWinnerName.name || gameWinnerName.dataValues.name,
+        status: gameStatus.dataValues.status,
+        winner: gameWinnerName.dataValues.name,
         message:
-          gameWinnerName.name || gameWinnerName.dataValues.name
-            ? `${gameWinnerName.name || gameWinnerName.dataValues.name} wins!`
+          gameWinnerName.dataValues.name
+            ? `${gameWinnerName.dataValues.name} wins!`
             : "It's a draw!",
       });
     } else {
@@ -306,33 +308,40 @@ export const getGameInfo = async (gameId) => {
   }
 };
 
+
 export const listAllWinRecords = async (_, socket, io) => {
   try {
-    const winRecords = await db.games.findAll({
-      where: {
-        status: db.Sequelize.literal(
-          '"Game"."status" = \'finished\' AND "Game"."winner" IS NOT NULL'
-        ),
-      },
-      attributes: [
-        [db.Sequelize.col("PlayerOne.name"), "playerName"],
-        [db.Sequelize.fn("COUNT", db.Sequelize.col("Game.winner")), "wins"],
-      ],
+    // Fetch all finished games
+    const finishedGames = await db.games.findAll({
+      where: { status: 'finished', winner: { [db.Sequelize.Op.ne]: null } },
       include: [
-        {
-          model: db.players,
-          as: "PlayerOne",
-          attributes: [],
-        },
-      ],
-      group: ["PlayerOne.name"],
-      order: [[db.Sequelize.literal('"wins"'), "DESC"]],
+        { model: db.players, as: 'PlayerOne', attributes: ['name'] },
+        { model: db.players, as: 'PlayerTwo', attributes: ['name'] }
+      ]
     });
 
-    const records = winRecords.map((record) => ({
-      playerName: record.get("playerName"),
-      wins: record.get("wins"),
-    }));
+    // empty object to track wins for each player
+    let winCounts = {};
+
+    // Iterate over finished games to aggregate wins
+    finishedGames.forEach(game => {
+      // check if the winner is PlayerOne or PlayerTwo
+      const winnerName = game.winner === game.playerOneId ? game.PlayerOne.name : game.PlayerTwo.name;
+
+      // If player isn't in winCounts yet, add them
+      if (!winCounts[winnerName]) {
+        winCounts[winnerName] = 0;
+      }
+
+      // Increment the win count for the winning player
+      winCounts[winnerName]++;
+    });
+
+    // Converting winCounts to an array of objects for emission
+    const records = Object.keys(winCounts).map(playerName => ({
+      playerName,
+      wins: winCounts[playerName]
+    })).sort((a, b) => b.wins - a.wins); 
 
     io.emit("winningRecordsResponse", { type: "winRecords", records });
   } catch (error) {

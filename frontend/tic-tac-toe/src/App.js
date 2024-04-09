@@ -178,15 +178,16 @@ function App() {
         setGameId(game.gameId);
         setGameStarted(true);
         setIsPlayerTwo(true);
+
         setWaitingForPlayer(false);
         setNotificationMessage(
           `Joined game successfully. Your game ID: ${game.gameId}. Waiting for the game to start.`
         );
+        setTimeout(() => setNotificationMessage(""), 15000);
       }
     };
 
     const handleGameResponse = (res) => {
-      console.log("game response ======>", res);
       if (res.newGame && res.gameSessionId) {
         localStorage.setItem("gameSessionID", res.gameSessionId);
         setGameSessionId(res.gameSessionId);
@@ -209,6 +210,7 @@ function App() {
         setGameId(response.updateGame.gameId);
         setPlayerId(playerTwo.playerId);
         setIsPlayerTwo(true);
+        setPlayerName(playerTwo.name);
         setGameStarted(true);
         setGameStarted(GameStatus.In_Progress);
         setWaitingForPlayer(false);
@@ -267,6 +269,8 @@ function App() {
     };
 
     const handleGameOver = (response) => {
+      console.log("handle game over response ======>", response);
+
       if (response.type === "gameOver") {
         setGameOver(true);
         setWinnerMessage(response.message);
@@ -290,6 +294,7 @@ function App() {
     };
 
     const handleShowWinRecords = (response) => {
+      console.log("win record response ====>",response)
       if (response.type === "winRecords") {
         const { records } = response;
         setWinRecords(records);
@@ -366,7 +371,6 @@ function App() {
     const session = localStorage.getItem("sessionID");
 
     if (session) {
-
       socket.emit("validateSession", { sessionID: session }, (response) => {
         if (response.valid) {
           updateGameStateFromResponse(response);
@@ -414,14 +418,15 @@ function App() {
   };
 
   const handleResetGame = () => {
-    if(gameId){
+    if (gameId) {
       setBoard(Array(9).fill(null));
     }
-  }
+  };
 
   if (isLoading) {
-    return <div>Loading...</div>;
+    return <div className="loader">Loading...</div>;
   }
+
   return (
     <div className="App">
       {errorMessage && <div className="error-message">{errorMessage}</div>}
@@ -472,9 +477,15 @@ function App() {
 
           <div className={`turn-info ${myTurn ? "" : "waiting-for-turn"}`}>
             {myTurn ? (
-              <p>It's your turn!</p>
+              <p>
+                <span className="player-name">{playerName}</span> It's your turn
+                to make a move!
+              </p>
             ) : (
-              <p>Waiting for the challenger to make a move...</p>
+              <p>
+                Waiting for <span className="player-name">{playerName}</span> to
+                make a move...
+              </p>
             )}
           </div>
 

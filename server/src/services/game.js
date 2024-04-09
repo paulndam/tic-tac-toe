@@ -118,6 +118,7 @@ export const makeMove = async (gameId, playerId, position) => {
     board[position] = game.currentTurn === game.playerOneId ? 'X' : 'O';
 
     const result = checkWinCondition(board);
+    console.log("result =====>",result)
 
     if (result === 'X' || result === 'O') {
       game.set({

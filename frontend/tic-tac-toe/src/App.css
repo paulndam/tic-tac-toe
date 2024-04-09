@@ -177,6 +177,53 @@ input[type="text"] {
 }
 
 .turn-info.waiting-for-turn {
-  border-left-color: #FF9800; /* Orange for waiting */
+  border-left-color: #FF9800; 
   
+}
+
+
+.notification-message {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #28a745;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 5px;
+  box-shadow: 0 2px 4px rgba(0,0,0,.2);
+  z-index: 1050; 
+  animation: fadeOut 15s forwards; 
+}
+
+@keyframes fadeOut {
+  from {opacity: 1;}
+  to {opacity: 0; visibility: hidden;}
+}
+
+
+.loader {
+  border: 4px solid rgba(0, 0, 0, 0.1); 
+  border-radius: 50%;
+  border-top: 4px solid #3498db; 
+  width: 40px;
+  height: 40px;
+  animation: spin 2s linear infinite;
+  margin: 20px auto; 
+  text-align: center;
+  color: #333;
+  font-family: Arial, sans-serif;
+  padding-top: 50px; 
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+
+.player-name {
+  font-weight: bold; /* Make the name bold */
+  color: #007bff; /* Example: a shade of blue to make it stand out, adjust as needed */
+  font-size: 1.2em; /* Slightly larger text to ensure visibility */
 }
